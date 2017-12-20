@@ -1,18 +1,18 @@
-package tracr
+package bots
 
 import (
 	log "github.com/inconshreveable/log15"
-	"tracr/conditions"
-	"tracr/actions"
+	"tracr/bots/conditions"
+	"tracr/bots/actions"
 	"io/ioutil"
 	"encoding/json"
 	"errors"
 )
 
-var bots []*Bot
+var bots map[string]*Bot // map botName to bot
 
 func Init() {
-	log.Info("Initializing command module", "module", "command")
+	log.Info("Initializing bots module", "module", "command")
 	log.Debug("Creating bots", "module", "command")
 
 	// initialize condition function map
@@ -41,14 +41,23 @@ func Init() {
 
 }
 
-func Start() {
-	log.Info("Starting command module", "module", "command")
-	for _, bot := range bots {
-		go bot.start()
+func Start(botName string) {
+	//log.Info("Starting command module", "module", "command")
+	//for _, bot := range bots {
+	//	go bot.start()
+	//}
+
+	bot, ok := bots[botName]
+
+	if !ok {
+		// error - doesn't contain botname
+		return
 	}
+
+	bot.start()
 }
 
-func readBotFile(filePath string) (*Bot, error) {
+func ReadBotFile(filePath string) (*Bot, error) {
 	rawJson, _ := ioutil.ReadFile(filePath)
 	var data map[string]interface{}
 

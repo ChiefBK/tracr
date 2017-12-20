@@ -1,8 +1,8 @@
-package tracr
+package bots
 
 import (
 	log "github.com/inconshreveable/log15"
-	"tracr/actions"
+	"tracr/bots/actions"
 )
 
 type Strategy struct {
