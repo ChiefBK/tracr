@@ -93,21 +93,32 @@ func NewBot(key, exchange, pair string) (bot *Bot) {
 }
 
 func addBot(bot *Bot) {
+	// TODO - respond with error if bot already exists. Require --overwrite flag to override
+
 	log.Info("Adding Bot", "module", "command", "botKey", bot.Key)
 	botEncoding := toGOB64(bot)
 	log.Debug("bot encoding", "module", "command", "encoding", botEncoding)
 	tracr_cache.PutBotEncoding(bot.Key, botEncoding)
 }
 
+/**
+	Returns nil if Bot doesn't exist
+ */
 func fetchBot(botName string) *Bot {
 	log.Info("Fetching Bot", "module", "command", "botKey", botName)
-	botEncoding := tracr_cache.GetBotEncoding(botName)
+	botEncoding, err := tracr_cache.GetBotEncoding(botName)
+
+	if err != nil { // error getting bot from cache. maybe doesn't exist?
+		log.Error("error getting bot from cache", "module", "command", "botKey", botName, "error", err)
+		return nil
+	}
+
 	bot := fromGOB64(botEncoding)
 	return bot
 }
 
 func (self *Bot) start(interval time.Duration, startImmediately bool) {
-	log.Info("Starting bot", "botKey", self.Key, "module", "command")
+	log.Info("Starting bot", "botKey", self.Key, "module", "command", "interval", interval, "startImmediately", startImmediately)
 
 	go func() {
 		// if interval specified in cmd args
@@ -119,15 +130,20 @@ func (self *Bot) start(interval time.Duration, startImmediately bool) {
 			if !startImmediately {
 				<-time.After(1 * time.Minute) // wait one minute
 			} else {
+				log.Debug("starting immediately", "module", "command", "botKey", self.Key)
 				startImmediately = false
 				go self.run()
 				continue
 			}
 
-			nowUnix := time.Now().Unix() / 60
-			botIntervalUnix := int64(interval.Minutes())
+			now := time.Now()
+			nowUnix := now.Unix() / 60
+			botIntervalUnix := int64(self.Interval.Minutes())
 
+			// TODO - keep record of the last running time - if time.Now minus interval is greater than last running time -> start
+			// so if the exact minute the bot runs in is missed it'll run anyways
 			if nowUnix%botIntervalUnix == 0 { // if it's time for bot to run
+				log.Debug("starting at interval", "module", "command", "botKey", self.Key, "interval", self.Interval, "now", now)
 				go self.run()
 			}
 
@@ -155,13 +171,15 @@ func (self *Bot) run() {
 
 	if !ready {
 		// print warning bot could not run because of precheck
+		log.Error("failed pre-check", "module", "command", "botKey", self.Key)
 		return
 	}
 
 	self.IsRunning = true
 
-	log.Debug("simulate bot running for 5 seconds", "module", "command", "botKey", self.Key)
-	<-time.After(time.Second * 5)
+	log.Debug("simulate bot running for a few seconds", "module", "command", "botKey", self.Key)
+	<-time.After(time.Second * 10)
+	log.Debug("done", "module", "command", "botKey", self.Key)
 
 	//var signalActionChan = make(chan *actions.ActionQueue)
 	//self.runStrategy(signalActionChan)
@@ -228,7 +246,7 @@ func buildDefaultBotData() (data BotData) {
 // Returns true if bot is ok to run, false otherwise
 func (self *Bot) preChecks() bool {
 	if self.IsRunning {
-		log.Error("Failed pre-check. Bot already running", "module", "command", "botKey", self.Key)
+		log.Error("Bot already running", "module", "command", "botKey", self.Key)
 		return false
 	}
 

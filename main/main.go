@@ -7,13 +7,14 @@ import (
 	"flag"
 	"time"
 	log "github.com/inconshreveable/log15"
+	"strings"
 )
 
 /*
 
 	Program Usage
 
-	tracr init <botTemplateFilePath>
+	tracr init [--overwrite] <botTemplateFilePath>
 	tracr start (-s | -i) (<botName>... | --all)
 	tracr start (-s -i) (<botName>... | --all)
 	tracr (stop|destroy|monitor) (<botName>... | --all)
@@ -26,6 +27,7 @@ import (
 	--all -a										selects all bots
 	--start-now -s									starts bot(s) now
 	--interval <interval>, -i <interval>			the interval for the bot in minutes
+	--overwrite										overwrite bot if already exists
 
 
 	see http://docopt.org/ for docs on program usage syntax
@@ -46,13 +48,15 @@ func main() {
 		return
 	}
 
-	action := args[0]
+	action := determineAction(args)
 	startNow1 := flag.Bool("s", false, "Start the bot immediately")
 	startNow2 := flag.Bool("start-now", false, "Start the bot immediately")
 	interval1 := flag.Int("i", 0, "Interval of bot")
 	interval2 := flag.Int("interval", 0, "Interval of bot")
 	allBots := flag.Bool("all", false, "Selects all bots")
 	flag.Parse()
+
+	log.Debug("startNow", "module", "command", "sn1", *startNow1, "sn2", *startNow2)
 
 	var botName string
 	var interval time.Duration
@@ -102,6 +106,21 @@ func main() {
 		log.Error("specified action not valid")
 		return
 	}
+}
+
+func determineAction(args []string) string {
+	for _, arg := range args {
+		switch strings.ToLower(arg) {
+		case "start":
+			return "start"
+		case "stop":
+			return "stop"
+		case "init":
+			return "init"
+		}
+	}
+
+	return ""
 }
 
 func stop(botName string) {

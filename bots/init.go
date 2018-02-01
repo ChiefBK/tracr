@@ -54,21 +54,27 @@ func Start(botName string, interval time.Duration, startImmediately bool) {
 	//for _, bot := range bots {
 	//	go bot.start()
 	//}
-	panic("do not use Start()")
+	bot := fetchBot(botName)
 
-	bot, ok := runningBots[botName]
-
-	if !ok {
+	if bot == nil {
 		// error - doesn't contain bot
 		log.Error("bot key specified doesn't not exist", "module", "command")
 		return
 	}
 
+	runningBots[botName] = bot
 	bot.start(interval, startImmediately)
+	log.Info("bot has started", "module", "command", "botKey", botName)
+
+	log.Info("waiting a few minutes...")
+	<-time.After(10 * time.Minute)
 }
 
 func Stop(botName string) {
-	panic("implement me")
+	bot := runningBots[botName]
+	bot.stop()
+	delete(runningBots, botName)
+	log.Info("bot has stopped", "module", "command", "botKey", botName)
 }
 
 func InitializeBot(templatePath string) {
@@ -86,6 +92,11 @@ func InitializeBot(templatePath string) {
 	// test code
 	botName := bot.Key
 	botCopy := fetchBot(botName)
+
+	if botCopy == nil {
+		log.Debug("bot copy is nil", "module", "command")
+		return
+	}
 
 	log.Debug("bot copy", "module", "command", "key", botCopy.Key)
 	log.Debug("bot copy", "module", "command", "position", botCopy.Position)
