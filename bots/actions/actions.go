@@ -32,38 +32,38 @@ type ActionData map[string]interface{}
 type Action struct {
 	Intent   ActionIntent
 	Id       string
-	data     ActionData
+	Data     ActionData
 	Consumer ActionConsumer
 }
 
 var ActionFunctions = make(map[string]func() *Action)
 
 func (self *Action) SetVolume(volume float64) {
-	self.data["volume"] = volume
+	self.Data["volume"] = volume
 }
 
 func (self *Action) SetLeverage(leverage int) {
-	self.data["leverage"] = leverage
+	self.Data["leverage"] = leverage
 }
 
 func (self *Action) SetMargin(margin float64) {
-	self.data["margin"] = margin
+	self.Data["margin"] = margin
 }
 
 func (self *Action) SetOrderType(orderType OrderType) {
-	self.data["orderType"] = orderType
+	self.Data["orderType"] = orderType
 }
 
 func (self *Action) SetPair(pair string) {
-	self.data["pair"] = pair
+	self.Data["pair"] = pair
 }
 
 func (self *Action) SetExchange(exchange string) {
-	self.data["exchange"] = exchange
+	self.Data["exchange"] = exchange
 }
 
 func (self *Action) SetBotKey(botKey string) {
-	self.data["botKey"] = botKey
+	self.Data["botKey"] = botKey
 }
 
 func newAction(intent ActionIntent, data ActionData, consumer ActionConsumer) *Action {

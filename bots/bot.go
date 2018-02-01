@@ -3,7 +3,9 @@ package bots
 import (
 	log "github.com/inconshreveable/log15"
 	"tracr/bots/actions"
-	"tracr-daemon/broker"
+	"time"
+	"strings"
+	"tracr-cache"
 )
 
 const (
@@ -31,12 +33,15 @@ func (self BotData) orderType() actions.OrderType {
 }
 
 type Bot struct {
-	key        string // must be unique amongst bots
-	exchange   string
-	pair       string
-	position   string
-	strategies map[string]*Strategy
-	data       BotData
+	Key        string // must be unique amongst bots
+	Exchange   string
+	Pair       string
+	Position   string
+	Strategies map[string]*Strategy
+	Data       BotData
+	IsRunning  bool
+	Interval   time.Duration // at the top of which interval to run bot
+	Command    chan string
 }
 
 //func addBot(botKey, exchange, pair string, data map[string]interface{}, trees ...*DecisionTree) {
@@ -70,65 +75,141 @@ type Bot struct {
 //	bots = append(bots, bot1)                                                  // add bot to list of bots in strategy module
 //}
 
+var runningBots map[string]*Bot // map botKey to bot
+
 func NewBot(key, exchange, pair string) (bot *Bot) {
 	bot = new(Bot)
-	bot.strategies = make(map[string]*Strategy)
-	bot.exchange = exchange
-	bot.pair = pair
-	bot.key = key
-	bot.position = CLOSED_POSITION
-	bot.data = buildDefaultBotData()
+	bot.Strategies = make(map[string]*Strategy)
+	bot.Exchange = exchange
+	bot.Pair = pair
+	bot.Key = key
+	bot.Position = CLOSED_POSITION
+	bot.Data = buildDefaultBotData()
+	bot.IsRunning = false
+	bot.Interval = 5 * time.Minute // default duration of 5 minutes
+	bot.Command = make(chan string)
 
 	return
 }
 
-func (self *Bot) start() {
-	log.Info("Starting bot", "botKey", self.key, "module", "command")
-	var signalActionChan = make(chan *actions.ActionQueue)
-	self.runStrategy(signalActionChan)
+func addBot(bot *Bot) {
+	log.Info("Adding Bot", "module", "command", "botKey", bot.Key)
+	botEncoding := toGOB64(bot)
+	log.Debug("bot encoding", "module", "command", "encoding", botEncoding)
+	tracr_cache.PutBotEncoding(bot.Key, botEncoding)
+}
 
-	signalActionQueue := <-signalActionChan
+func fetchBot(botName string) *Bot {
+	log.Info("Fetching Bot", "module", "command", "botKey", botName)
+	botEncoding := tracr_cache.GetBotEncoding(botName)
+	bot := fromGOB64(botEncoding)
+	return bot
+}
 
-	botActionQueue := actions.NewActionQueue()
-	log.Debug("received actions from strategy", "botKey", self.key, "module", "command", "actionLen", signalActionQueue.Length())
+func (self *Bot) start(interval time.Duration, startImmediately bool) {
+	log.Info("Starting bot", "botKey", self.Key, "module", "command")
 
-	action := signalActionQueue.Dequeue()
-
-	for action != nil {
-		log.Debug("processing action from strategy", "botKey", self.key, "module", "command", "action", action)
-
-		//return
-		if action.Consumer == actions.BOT {
-			// handle internal action
-		} else { // if actions.EXECUTOR
-			action.SetVolume(self.data.volume())
-			action.SetLeverage(self.data.leverage())
-			action.SetMargin(self.data.margin())
-			action.SetOrderType(self.data.orderType())
-			action.SetPair(self.pair)
-			action.SetExchange(self.exchange)
-			action.SetBotKey(self.key)
-			botActionQueue.Push(action)
+	go func() {
+		// if interval specified in cmd args
+		if interval.Minutes() != 0 {
+			self.Interval = interval
 		}
 
-		action = signalActionQueue.Dequeue()
+		for {
+			if !startImmediately {
+				<-time.After(1 * time.Minute) // wait one minute
+			} else {
+				startImmediately = false
+				go self.run()
+				continue
+			}
+
+			nowUnix := time.Now().Unix() / 60
+			botIntervalUnix := int64(interval.Minutes())
+
+			if nowUnix%botIntervalUnix == 0 { // if it's time for bot to run
+				go self.run()
+			}
+
+			select {
+			case command := <-self.Command:
+				if strings.ToLower(command) == "stop" { // if stop command issued
+					log.Info("stop command received", "module", "command")
+					return
+				}
+			case <-time.After(time.Nanosecond * 1): // timeout if no command has been issued
+			}
+		}
+
+	}()
+
+}
+
+func (self *Bot) stop() {
+	log.Info("stop command issued", "module", "command")
+	self.Command <- "stop"
+}
+
+func (self *Bot) run() {
+	ready := self.preChecks()
+
+	if !ready {
+		// print warning bot could not run because of precheck
+		return
 	}
 
-	responseChannel := broker.GetBotResponseChannel(self.key)
-	//send actions to action receiver
-	broker.SendToExecutor(self.key, *botActionQueue)
-	executorResponse := <-responseChannel
+	self.IsRunning = true
 
-	log.Debug("Received executor response", "botKey", self.key, "module", "command", "response", executorResponse)
+	log.Debug("simulate bot running for 5 seconds", "module", "command", "botKey", self.Key)
+	<-time.After(time.Second * 5)
+
+	//var signalActionChan = make(chan *actions.ActionQueue)
+	//self.runStrategy(signalActionChan)
+	//
+	//signalActionQueue := <-signalActionChan
+	//
+	//botActionQueue := actions.NewActionQueue()
+	//log.Debug("received actions from strategy", "botKey", self.Key, "module", "command", "actionLen", signalActionQueue.Length())
+	//
+	//action := signalActionQueue.Dequeue()
+	//
+	//for action != nil {
+	//	log.Debug("processing action from strategy", "botKey", self.Key, "module", "command", "action", action)
+	//
+	//	//return
+	//	if action.Consumer == actions.BOT {
+	//		// handle internal action
+	//	} else { // if actions.EXECUTOR
+	//		action.SetVolume(self.data.volume())
+	//		action.SetLeverage(self.data.leverage())
+	//		action.SetMargin(self.data.margin())
+	//		action.SetOrderType(self.data.orderType())
+	//		action.SetPair(self.pair)
+	//		action.SetExchange(self.exchange)
+	//		action.SetBotKey(self.Key)
+	//		botActionQueue.Push(action)
+	//	}
+	//
+	//	action = signalActionQueue.Dequeue()
+	//}
+	//
+	//responseChannel := broker.GetBotResponseChannel(self.Key)
+	////send actions to action receiver
+	//broker.SendToExecutor(self.Key, *botActionQueue)
+	//executorResponse := <-responseChannel
+	//
+	//log.Debug("Received executor response", "botKey", self.Key, "module", "command", "response", executorResponse)
+
+	self.IsRunning = false
 }
 
 func (self *Bot) addStrategy(strategy *Strategy) {
-	pos := strategy.position
-	self.strategies[pos] = strategy
+	pos := strategy.Position
+	self.Strategies[pos] = strategy
 }
 
 func (self *Bot) runStrategy(actionChan chan<- *actions.ActionQueue) {
-	go self.strategies[self.position].run(actionChan)
+	go self.Strategies[self.Position].run(actionChan)
 }
 
 func buildDefaultBotData() (data BotData) {
@@ -141,4 +222,15 @@ func buildDefaultBotData() (data BotData) {
 	data["orderType"] = orderType
 
 	return
+}
+
+// Checks if bot has green light to run
+// Returns true if bot is ok to run, false otherwise
+func (self *Bot) preChecks() bool {
+	if self.IsRunning {
+		log.Error("Failed pre-check. Bot already running", "module", "command", "botKey", self.Key)
+		return false
+	}
+
+	return true
 }

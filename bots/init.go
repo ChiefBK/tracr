@@ -4,22 +4,30 @@ import (
 	log "github.com/inconshreveable/log15"
 	"tracr/bots/conditions"
 	"tracr/bots/actions"
-	"io/ioutil"
-	"encoding/json"
-	"errors"
+	"time"
+	"encoding/gob"
+	"tracr-cache"
 )
-
-var bots map[string]*Bot // map botName to bot
 
 func Init() {
 	log.Info("Initializing bots module", "module", "command")
-	log.Debug("Creating bots", "module", "command")
+
+	runningBots = make(map[string]*Bot)
 
 	// initialize condition function map
 	conditions.ConditionFunctions["TrueFunction"] = conditions.TrueFunction
 
 	// initialize action function map
 	actions.ActionFunctions["ShortPositionAction"] = actions.ShortPositionAction
+
+	//gob.Register(Bot{})
+	//gob.Register(Strategy{})
+	//gob.Register(BotData{})
+	//gob.Register(DecisionTree{})
+	//gob.Register(actions.Action{})
+	gob.Register(actions.OrderType(0))
+
+	tracr_cache.Init()
 
 	//path := filepath.Join("bot_templates", "bot1Template.json")
 	//bot, err := readBotFile(path)
@@ -41,90 +49,54 @@ func Init() {
 
 }
 
-func Start(botName string) {
+func Start(botName string, interval time.Duration, startImmediately bool) {
 	//log.Info("Starting command module", "module", "command")
 	//for _, bot := range bots {
 	//	go bot.start()
 	//}
+	panic("do not use Start()")
 
-	bot, ok := bots[botName]
+	bot, ok := runningBots[botName]
 
 	if !ok {
-		// error - doesn't contain botname
+		// error - doesn't contain bot
+		log.Error("bot key specified doesn't not exist", "module", "command")
 		return
 	}
 
-	bot.start()
+	bot.start(interval, startImmediately)
 }
 
-func ReadBotFile(filePath string) (*Bot, error) {
-	rawJson, _ := ioutil.ReadFile(filePath)
-	var data map[string]interface{}
-
-	err := json.Unmarshal(rawJson, &data)
-
-	if err != nil {
-		//log.Error("there was an error un-marshalling stratagies file", "module", "command", "file", filePath)
-		return nil, errors.New("there was an error un-marshalling strategies file")
-	}
-
-	name := data["name"].(string)
-	pair := data["pair"].(string)
-	exchange := data["exchange"].(string)
-	bot := NewBot(name, exchange, pair)
-	strategies := data["strategies"].([]interface{})
-
-	for _, strategy := range strategies {
-		position := strategy.(map[string]interface{})["position"].(string)
-		trees := strategy.(map[string]interface{})["trees"].([]interface{})
-		strat := NewStategy(position)
-
-		for _, tree := range trees {
-			rootSignal := tree.(map[string]interface{})["root"]
-			signal := buildRoot(rootSignal.(map[string]interface{}))
-			decisionTree := newDecisionTree(signal)
-			strat.AddTree(decisionTree)
-		}
-
-		bot.addStrategy(strat)
-	}
-
-	return bot, nil
+func Stop(botName string) {
+	panic("implement me")
 }
 
-func buildRoot(root map[string]interface{}) *Signal {
-	signal := createSignalFromInterface(root)
-	children := root["children"].([]interface{})
-	for _, child := range children {
-		signal.addChild(buildRoot(child.(map[string]interface{})))
-	}
-	return signal
-}
+func InitializeBot(templatePath string) {
+	bot, error := readBotFile(templatePath)
 
-func createSignalFromInterface(raw map[string]interface{}) *Signal {
-	isRoot := raw["isRoot"].(bool)
-	conditionFunctionName := raw["condition"].(string)
-	actionFunctionName, actionNotNull := raw["action"].(string)
+	log.Debug("real bot", "module", "command", "'root signal condition'", bot.Strategies["closed"].DecisionTrees[0].Root.ConditionFunctionName)
 
-	condFunc, ok := conditions.ConditionFunctions[conditionFunctionName]
-
-	if !ok {
-		// handle error
+	if error != nil {
+		log.Error("There was an error initializing the bot", "module", "command", "templatePath", templatePath)
+		return
 	}
 
-	var action *actions.Action
-	if actionNotNull {
-		actionFunc, ok := actions.ActionFunctions[actionFunctionName]
+	addBot(bot)
 
-		if !ok {
-			// handle error
-		}
+	// test code
+	botName := bot.Key
+	botCopy := fetchBot(botName)
 
-		action = actionFunc()
-	} else {
-		action = nil
-	}
-
-	signal := NewSignal(condFunc, action, isRoot)
-	return signal
+	log.Debug("bot copy", "module", "command", "key", botCopy.Key)
+	log.Debug("bot copy", "module", "command", "position", botCopy.Position)
+	log.Debug("bot copy", "module", "command", "exchange", botCopy.Exchange)
+	log.Debug("bot copy", "module", "command", "data", botCopy.Data)
+	log.Debug("bot copy", "module", "command", "strategy length", len(botCopy.Strategies))
+	log.Debug("bot copy", "module", "command", "tree length", len(botCopy.Strategies["closed"].DecisionTrees))
+	log.Debug("bot copy", "module", "command", "root signal condition", botCopy.Strategies["closed"].DecisionTrees[0].Root.ConditionFunctionName)
+	log.Debug("bot copy", "module", "command", "root signal children", len(botCopy.Strategies["closed"].DecisionTrees[0].Root.Children))
+	log.Debug("bot copy", "module", "command", "root signal child's children", len(botCopy.Strategies["closed"].DecisionTrees[0].Root.Children[0].Children))
+	log.Debug("bot copy", "module", "command", "root signal child's isRoot", botCopy.Strategies["closed"].DecisionTrees[0].Root.Children[0].IsRoot)
+	log.Debug("bot copy", "module", "command", "root signal child's action", botCopy.Strategies["closed"].DecisionTrees[0].Root.Children[0].Action)
+	log.Debug("bot copy", "module", "command", "root signal child's condition", botCopy.Strategies["closed"].DecisionTrees[0].Root.Children[0].ConditionFunctionName)
 }

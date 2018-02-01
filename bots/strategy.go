@@ -6,8 +6,8 @@ import (
 )
 
 type Strategy struct {
-	decisionTrees []*DecisionTree
-	position      string
+	DecisionTrees []*DecisionTree
+	Position      string
 }
 
 func NewStategy(position string) *Strategy {
@@ -16,14 +16,14 @@ func NewStategy(position string) *Strategy {
 }
 
 func (self *Strategy) AddTree(tree *DecisionTree) {
-	self.decisionTrees = append(self.decisionTrees, tree)
+	self.DecisionTrees = append(self.DecisionTrees, tree)
 }
 
 func (self *Strategy) run(botActionChan chan<- *actions.ActionQueue) {
 	log.Debug("running strategy", "module", "command")
 	botActionQueue := actions.NewActionQueue() // the queue that will be sent back to the bot
 
-	for _, tree := range self.decisionTrees {
+	for _, tree := range self.DecisionTrees {
 		treeActionChan := make(chan *actions.ActionQueue)
 		go tree.run(treeActionChan)
 

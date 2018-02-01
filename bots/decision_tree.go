@@ -6,7 +6,7 @@ import (
 )
 
 type DecisionTree struct {
-	root     *Signal
+	Root *Signal
 }
 
 func newDecisionTree(rootSignal *Signal) *DecisionTree {
@@ -19,7 +19,7 @@ func (self *DecisionTree) run(actionQueueChan chan<- *actions.ActionQueue) {
 	signalActionChan := make(chan *actions.Action)
 	actionQueue := actions.NewActionQueue()
 
-	go self.root.run(signalActionChan) // runs root signal of tree
+	go self.Root.run(signalActionChan) // runs root signal of tree
 
 	for action := range signalActionChan { // reads actions from signals thru channel
 		actionQueue.Push(action)
