@@ -82,7 +82,7 @@ property.
 
 ### Operating your bots
 
-Once these three items are defined the bot may be created. 
+To create a bot
 
     tracr create <botTemplateFilePath>
     
