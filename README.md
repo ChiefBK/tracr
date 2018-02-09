@@ -80,6 +80,8 @@ property.
 
 ---
 
+### Operating your bots
+
 Once these three items are defined the bot may be created. 
 
     tracr create <botTemplateFilePath>
