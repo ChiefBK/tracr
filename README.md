@@ -5,7 +5,7 @@ The executable which creates, starts, stops, and destroys bots.
 
 To create a bot one must do the following
 
-### Create a strategy file
+### Create a strategy
 A strategy file looks something like this. The top level object contains a `name`, `pair`, `exchange` and `strategies` 
 property. Each time the bot is run it executes __one__ of the `strategies`. The strategy that's picked to execute 
 corresponds with the current trading position of the bot e.g. if the bot is in a _closed_ position it will execute the 
@@ -84,7 +84,7 @@ property.
 
 To create a bot
 
-    tracr create <botTemplateFilePath>
+    tracr create <botStrategyFilePath>
     
 After the bot is created it can be started
 
