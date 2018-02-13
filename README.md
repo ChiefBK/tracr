@@ -1,7 +1,7 @@
 # tracr-bot
 The executable which creates, starts, stops, and destroys bots. 
 
-## Usage
+## Preparation
 
 To create a bot one must do the following
 
@@ -80,7 +80,7 @@ property.
 
 ---
 
-### Operating your bots
+### Usage
 
 To create a bot
 
