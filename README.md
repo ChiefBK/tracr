@@ -78,9 +78,17 @@ and the errors have been handled.
 currency pair, exchange name, etc. For internal actions this could contain the information for updating the bot's `vars` 
 property.
 
----
+### Start the tracr-bot service
 
-### Usage
+To start the service
+
+    sudo systemctl start tracr-bot
+
+To stop the service
+
+    sudo systemctl stop tracr-bot
+
+## Usage
 
 To create a bot
 
