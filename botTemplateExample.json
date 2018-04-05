@@ -2,20 +2,22 @@
   "name": "aBotNamedBill",
   "pair": "USD-BTC",
   "exchange": "kraken",
+  "interval": 5,
   "strategies": [
     {
       "position": "closed",
       "trees": [
         {
+          "name": "christmas tree",
           "root": {
             "isRoot": true,
             "condition": "TrueFunction",
-            "action": null,
+            "actionIntent": null,
             "children": [
               {
                 "isRoot": false,
                 "condition": "TrueFunction",
-                "action": "ShortPositionAction",
+                "actionIntent": "ShortPositionAction",
                 "children": []
               }
             ]

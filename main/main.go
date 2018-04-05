@@ -8,13 +8,15 @@ import (
 	"time"
 	log "github.com/inconshreveable/log15"
 	"strings"
+	"tracr-cache"
+	"tracr-store"
 )
 
 /*
 
 	Program Usage
 
-	tracr init [--overwrite] <botTemplateFilePath>
+	tracr create [--overwrite] <botTemplateFilePath>
 	tracr start (-s | -i) (<botName>... | --all)
 	tracr start (-s -i) (<botName>... | --all)
 	tracr (stop|destroy|monitor) (<botName>... | --all)
@@ -82,14 +84,28 @@ func main() {
 
 	bots.Init()
 
+	cacheClient, err := tracr_cache.NewCacheClient()
+
+	if err != nil {
+		log.Error("Can not continue with nil cache client")
+		return
+	}
+
+	storeClient, err := tracr_store.NewStore()
+
+	if err != nil {
+		log.Error("Can not continue without valid store")
+		return
+	}
+
 	switch action {
 	case "start":
-		bots.Start(botName, interval, startNow)
+		bots.Start(botName, interval, startNow, cacheClient, storeClient)
 	case "stop":
 		bots.Stop(botName)
 	case "destroy":
 		destroy(botName)
-	case "init":
+	case "create":
 		if len(args) != 2 {
 			log.Error("Invalid number of arguments for initializing bot", "module", "command", "numOfArgsProvided", len(args))
 			return
@@ -97,7 +113,7 @@ func main() {
 
 		templatePath := args[1]
 
-		bots.InitializeBot(templatePath)
+		bots.InitializeBot(templatePath, cacheClient)
 	case "monitor":
 		monitor(args[2:]...)
 	case "list":
@@ -115,8 +131,8 @@ func determineAction(args []string) string {
 			return "start"
 		case "stop":
 			return "stop"
-		case "init":
-			return "init"
+		case "create":
+			return "create"
 		}
 	}
 

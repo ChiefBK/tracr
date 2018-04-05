@@ -6,17 +6,18 @@ import (
 )
 
 type DecisionTree struct {
+	Name string
 	Root *Signal
 }
 
-func newDecisionTree(rootSignal *Signal) *DecisionTree {
-	return &DecisionTree{rootSignal}
+func newDecisionTree(name string, rootSignal *Signal) *DecisionTree {
+	return &DecisionTree{name, rootSignal}
 }
 
 func (self *DecisionTree) run(actionQueueChan chan<- *actions.ActionQueue) {
 	log.Debug("running tree", "module", "command")
 
-	signalActionChan := make(chan *actions.Action)
+	signalActionChan := make(chan *actions.ExternalAction)
 	actionQueue := actions.NewActionQueue()
 
 	go self.Root.run(signalActionChan) // runs root signal of tree
@@ -28,20 +29,20 @@ func (self *DecisionTree) run(actionQueueChan chan<- *actions.ActionQueue) {
 	actionQueueChan <- actionQueue // Sends queue of actions to Strategy
 }
 
-func BuildDecisionChain(position string, signals ...*Signal) *DecisionTree {
-	var rootSignal *Signal
-	var refSignal *Signal
-
-	for _, signal := range signals {
-		if rootSignal == nil { // if root signal
-			rootSignal = signal
-			refSignal = signal
-			continue
-		}
-
-		refSignal.addChild(signal)
-		refSignal = signal
-	}
-
-	return newDecisionTree(rootSignal)
-}
+//func BuildDecisionChain(position string, signals ...*Signal) *DecisionTree {
+//	var rootSignal *Signal
+//	var refSignal *Signal
+//
+//	for _, signal := range signals {
+//		if rootSignal == nil { // if root signal
+//			rootSignal = signal
+//			refSignal = signal
+//			continue
+//		}
+//
+//		refSignal.addChild(signal)
+//		refSignal = signal
+//	}
+//
+//	return newDecisionTree(rootSignal)
+//}

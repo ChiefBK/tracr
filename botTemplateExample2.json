@@ -1,0 +1,6 @@
+{
+  "name": "aBotNamedBill",
+  "pair": "USD-BTC",
+  "exchange": "kraken",
+  "interval": 5
+}

@@ -7,18 +7,17 @@ import (
 	"time"
 	"encoding/gob"
 	"tracr-cache"
+	"tracr-store"
 )
 
-func Init() {
+func Init() error {
 	log.Info("Initializing bots module", "module", "command")
 
 	runningBots = make(map[string]*Bot)
 
-	// initialize condition function map
-	conditions.ConditionFunctions["TrueFunction"] = conditions.TrueFunction
+	conditions.Init()
 
-	// initialize action function map
-	actions.ActionFunctions["ShortPositionAction"] = actions.ShortPositionAction
+	//actions.Init()
 
 	//gob.Register(Bot{})
 	//gob.Register(Strategy{})
@@ -27,7 +26,9 @@ func Init() {
 	//gob.Register(actions.Action{})
 	gob.Register(actions.OrderType(0))
 
-	tracr_cache.Init()
+
+
+	return nil
 
 	//path := filepath.Join("bot_templates", "bot1Template.json")
 	//bot, err := readBotFile(path)
@@ -49,12 +50,12 @@ func Init() {
 
 }
 
-func Start(botName string, interval time.Duration, startImmediately bool) {
+func Start(botName string, interval time.Duration, startImmediately bool, cacheClient *tracr_cache.CacheClient, storeClient tracr_store.Store) {
 	//log.Info("Starting command module", "module", "command")
 	//for _, bot := range bots {
 	//	go bot.start()
 	//}
-	bot := fetchBot(botName)
+	bot := fetchBot(botName, cacheClient)
 
 	if bot == nil {
 		// error - doesn't contain bot
@@ -77,37 +78,37 @@ func Stop(botName string) {
 	log.Info("bot has stopped", "module", "command", "botKey", botName)
 }
 
-func InitializeBot(templatePath string) {
-	bot, error := readBotFile(templatePath)
+func InitializeBot(templatePath string, cacheClient *tracr_cache.CacheClient) {
+	bot, err := readBotFile(templatePath)
 
-	log.Debug("real bot", "module", "command", "'root signal condition'", bot.Strategies["closed"].DecisionTrees[0].Root.ConditionFunctionName)
+	log.Debug("real bot", "module", "command", "num of strategies", bot.IsRunning)
+	//log.Debug("real bot", "module", "command", "'root signal condition'", bot.Strategies[0].Trees[0].Root.Condition)
 
-	if error != nil {
+	if err != nil {
 		log.Error("There was an error initializing the bot", "module", "command", "templatePath", templatePath)
 		return
 	}
 
-	addBot(bot)
+	saveBot(bot, cacheClient)
 
 	// test code
-	botName := bot.Key
-	botCopy := fetchBot(botName)
-
-	if botCopy == nil {
-		log.Debug("bot copy is nil", "module", "command")
-		return
-	}
-
-	log.Debug("bot copy", "module", "command", "key", botCopy.Key)
-	log.Debug("bot copy", "module", "command", "position", botCopy.Position)
-	log.Debug("bot copy", "module", "command", "exchange", botCopy.Exchange)
-	log.Debug("bot copy", "module", "command", "data", botCopy.Data)
-	log.Debug("bot copy", "module", "command", "strategy length", len(botCopy.Strategies))
-	log.Debug("bot copy", "module", "command", "tree length", len(botCopy.Strategies["closed"].DecisionTrees))
-	log.Debug("bot copy", "module", "command", "root signal condition", botCopy.Strategies["closed"].DecisionTrees[0].Root.ConditionFunctionName)
-	log.Debug("bot copy", "module", "command", "root signal children", len(botCopy.Strategies["closed"].DecisionTrees[0].Root.Children))
-	log.Debug("bot copy", "module", "command", "root signal child's children", len(botCopy.Strategies["closed"].DecisionTrees[0].Root.Children[0].Children))
-	log.Debug("bot copy", "module", "command", "root signal child's isRoot", botCopy.Strategies["closed"].DecisionTrees[0].Root.Children[0].IsRoot)
-	log.Debug("bot copy", "module", "command", "root signal child's action", botCopy.Strategies["closed"].DecisionTrees[0].Root.Children[0].Action)
-	log.Debug("bot copy", "module", "command", "root signal child's condition", botCopy.Strategies["closed"].DecisionTrees[0].Root.Children[0].ConditionFunctionName)
+	//botName := bot.Name
+	//botCopy := fetchBot(botName, cacheClient)
+	//
+	//if botCopy == nil {
+	//	log.Debug("bot copy is nil", "module", "command")
+	//	return
+	//}
+	//
+	//log.Debug("bot copy", "module", "command", "key", botCopy.Name)
+	//log.Debug("bot copy", "module", "command", "exchange", botCopy.Exchange)
+	//log.Debug("bot copy", "module", "command", "data", botCopy.Data)
+	//log.Debug("bot copy", "module", "command", "strategy length", len(botCopy.Strategies))
+	//log.Debug("bot copy", "module", "command", "tree length", len(botCopy.Strategies["closed"].Trees))
+	//log.Debug("bot copy", "module", "command", "root signal condition", botCopy.Strategies["closed"].Trees[0].Root.Condition)
+	//log.Debug("bot copy", "module", "command", "root signal children", len(botCopy.Strategies["closed"].Trees[0].Root.Children))
+	//log.Debug("bot copy", "module", "command", "root signal child's children", len(botCopy.Strategies["closed"].Trees[0].Root.Children[0].Children))
+	//log.Debug("bot copy", "module", "command", "root signal child's isRoot", botCopy.Strategies["closed"].Trees[0].Root.Children[0].IsRoot)
+	//log.Debug("bot copy", "module", "command", "root signal child's action", botCopy.Strategies["closed"].Trees[0].Root.Children[0].ActionIntent)
+	//log.Debug("bot copy", "module", "command", "root signal child's condition", botCopy.Strategies["closed"].Trees[0].Root.Children[0].Condition)
 }

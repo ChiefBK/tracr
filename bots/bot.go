@@ -2,10 +2,10 @@ package bots
 
 import (
 	log "github.com/inconshreveable/log15"
-	"tracr/bots/actions"
 	"time"
 	"strings"
 	"tracr-cache"
+	"tracr/bots/properties"
 )
 
 const (
@@ -14,34 +14,21 @@ const (
 	SHORT_POSITION  = "SHORT"
 )
 
-type BotData map[string]interface{}
-
-func (self BotData) volume() float64 {
-	return self["volume"].(float64)
-}
-
-func (self BotData) margin() float64 {
-	return self["margin"].(float64)
-}
-
-func (self BotData) leverage() int {
-	return self["leverage"].(int)
-}
-
-func (self BotData) orderType() actions.OrderType {
-	return self["orderType"].(actions.OrderType)
-}
-
 type Bot struct {
-	Key        string // must be unique amongst bots
-	Exchange   string
-	Pair       string
-	Position   string
-	Strategies map[string]*Strategy
-	Data       BotData
-	IsRunning  bool
-	Interval   time.Duration // at the top of which interval to run bot
-	Command    chan string
+	Name             string // must be unique amongst bots
+	Pair             string
+	Exchange         string
+	Interval         int // at which interval to run bot (in seconds)
+	Strategies       []*Strategy
+	Props            properties.Props // persisted bot properties to be used over many runs
+	OrderData        properties.Props // the argument data used to place orders
+	Command          chan string
+	Position         *string
+	IsRunning        *bool
+	SuccessfulRuns   *int
+	UnsuccessfulRuns *int
+	lastTimeRun      time.Time
+	//conditionFunctions map[string]conditions.ConditionFunction
 }
 
 //func addBot(botKey, exchange, pair string, data map[string]interface{}, trees ...*DecisionTree) {
@@ -77,36 +64,37 @@ type Bot struct {
 
 var runningBots map[string]*Bot // map botKey to bot
 
-func NewBot(key, exchange, pair string) (bot *Bot) {
-	bot = new(Bot)
-	bot.Strategies = make(map[string]*Strategy)
-	bot.Exchange = exchange
-	bot.Pair = pair
-	bot.Key = key
-	bot.Position = CLOSED_POSITION
-	bot.Data = buildDefaultBotData()
-	bot.IsRunning = false
-	bot.Interval = 5 * time.Minute // default duration of 5 minutes
-	bot.Command = make(chan string)
+//func NewBot(name, exchange, pair string) (bot *Bot) {
+//	bot = new(Bot)
+//	bot.Strategies = make(map[string]*Strategy)
+//	bot.Exchange = exchange
+//	bot.Pair = pair
+//	bot.Name = name
+//	bot.Position = CLOSED_POSITION
+//	bot.Properties = make(map[string]interface{})
+//	bot.Data = buildDefaultBotData()
+//	bot.IsRunning = false
+//	bot.Interval = 5 * time.Minute // default duration of 5 minutes
+//	bot.Command = make(chan string)
+//
+//	return
+//}
 
-	return
-}
-
-func addBot(bot *Bot) {
+func saveBot(bot *Bot, client *tracr_cache.CacheClient) {
 	// TODO - respond with error if bot already exists. Require --overwrite flag to override
 
-	log.Info("Adding Bot", "module", "command", "botKey", bot.Key)
+	log.Info("Adding Bot", "module", "command", "botKey", bot.Name)
 	botEncoding := toGOB64(bot)
 	log.Debug("bot encoding", "module", "command", "encoding", botEncoding)
-	tracr_cache.PutBotEncoding(bot.Key, botEncoding)
+	client.PutBotEncoding(bot.Name, botEncoding)
 }
 
 /**
-	Returns nil if Bot doesn't exist
+	Returns nil if Bot doesn't exist or error
  */
-func fetchBot(botName string) *Bot {
+func fetchBot(botName string, client *tracr_cache.CacheClient) *Bot {
 	log.Info("Fetching Bot", "module", "command", "botKey", botName)
-	botEncoding, err := tracr_cache.GetBotEncoding(botName)
+	botEncoding, err := client.GetBotEncoding(botName)
 
 	if err != nil { // error getting bot from cache. maybe doesn't exist?
 		log.Error("error getting bot from cache", "module", "command", "botKey", botName, "error", err)
@@ -118,33 +106,35 @@ func fetchBot(botName string) *Bot {
 }
 
 func (self *Bot) start(interval time.Duration, startImmediately bool) {
-	log.Info("Starting bot", "botKey", self.Key, "module", "command", "interval", interval, "startImmediately", startImmediately)
+	log.Info("Starting bot", "botKey", self.Name, "module", "command", "interval", interval, "startImmediately", startImmediately)
+
+	self.initializeRuntimeProperties()
 
 	go func() {
 		// if interval specified in cmd args
 		if interval.Minutes() != 0 {
-			self.Interval = interval
+			self.Interval = int(interval.Minutes())
 		}
 
 		for {
 			if !startImmediately {
 				<-time.After(1 * time.Minute) // wait one minute
 			} else {
-				log.Debug("starting immediately", "module", "command", "botKey", self.Key)
+				log.Debug("starting immediately", "module", "command", "botKey", self.Name)
 				startImmediately = false
-				go self.run()
+				go self.runStrategy()
 				continue
 			}
 
 			now := time.Now()
 			nowUnix := now.Unix() / 60
-			botIntervalUnix := int64(self.Interval.Minutes())
+			botIntervalUnix := int64(self.Interval)
 
 			// TODO - keep record of the last running time - if time.Now minus interval is greater than last running time -> start
 			// so if the exact minute the bot runs in is missed it'll run anyways
 			if nowUnix%botIntervalUnix == 0 { // if it's time for bot to run
-				log.Debug("starting at interval", "module", "command", "botKey", self.Key, "interval", self.Interval, "now", now)
-				go self.run()
+				log.Debug("starting at interval", "module", "command", "botKey", self.Name, "interval", self.Interval, "now", now)
+				go self.runStrategy()
 			}
 
 			select {
@@ -166,20 +156,21 @@ func (self *Bot) stop() {
 	self.Command <- "stop"
 }
 
-func (self *Bot) run() {
+func (self *Bot) runStrategy() {
 	ready := self.preChecks()
 
 	if !ready {
 		// print warning bot could not run because of precheck
-		log.Error("failed pre-check", "module", "command", "botKey", self.Key)
+		log.Error("failed pre-check", "module", "command", "botKey", self.Name)
 		return
 	}
 
-	self.IsRunning = true
+	*self.IsRunning = true
+	self.lastTimeRun = time.Now()
 
-	log.Debug("simulate bot running for a few seconds", "module", "command", "botKey", self.Key)
+	log.Debug("simulate bot running for a few seconds", "module", "command", "botKey", self.Name)
 	<-time.After(time.Second * 10)
-	log.Debug("done", "module", "command", "botKey", self.Key)
+	log.Debug("done", "module", "command", "botKey", self.Name)
 
 	//var signalActionChan = make(chan *actions.ActionQueue)
 	//self.runStrategy(signalActionChan)
@@ -218,35 +209,56 @@ func (self *Bot) run() {
 	//
 	//log.Debug("Received executor response", "botKey", self.Key, "module", "command", "response", executorResponse)
 
-	self.IsRunning = false
+	*self.IsRunning = false
 }
 
-func (self *Bot) addStrategy(strategy *Strategy) {
-	pos := strategy.Position
-	self.Strategies[pos] = strategy
-}
+//func (self *Bot) addStrategy(strategy *Strategy) {
+//	pos := strategy.Position
+//	self.Strategies[pos] = strategy
+//}
+//
+//func (self *Bot) runStrategy(actionChan chan<- *actions.ActionQueue) {
+//	go self.Strategies[self.Position].run(actionChan)
+//}
 
-func (self *Bot) runStrategy(actionChan chan<- *actions.ActionQueue) {
-	go self.Strategies[self.Position].run(actionChan)
-}
+func (self *Bot) initializeRuntimeProperties() {
+	if self.Props == nil {
+		self.Props = make(properties.Props)
+	}
 
-func buildDefaultBotData() (data BotData) {
-	data = make(BotData)
-	data["volume"] = 1.0
-	data["leverage"] = 2
-	data["margin"] = 0.5
+	if self.OrderData == nil {
+		self.OrderData = make(properties.Props)
+		self.OrderData["volume"] = 0.1
+		self.OrderData["leverage"] = 2
+		self.OrderData["type"] = "market"
+	}
 
-	var orderType actions.OrderType = actions.MARKET_ORDER
-	data["orderType"] = orderType
+	if self.Position == nil {
+		self.Position = new(string)
+		*self.Position = CLOSED_POSITION
+	}
 
-	return
+	if self.IsRunning == nil {
+		self.IsRunning = new(bool)
+		*self.IsRunning = false
+	}
+
+	if self.SuccessfulRuns == nil {
+		self.SuccessfulRuns = new(int)
+		*self.SuccessfulRuns = 0
+	}
+
+	if self.UnsuccessfulRuns == nil {
+		self.UnsuccessfulRuns = new(int)
+		*self.UnsuccessfulRuns = 0
+	}
 }
 
 // Checks if bot has green light to run
 // Returns true if bot is ok to run, false otherwise
 func (self *Bot) preChecks() bool {
-	if self.IsRunning {
-		log.Error("Bot already running", "module", "command", "botKey", self.Key)
+	if *self.IsRunning {
+		log.Error("Bot already running", "module", "command", "botKey", self.Name)
 		return false
 	}
 

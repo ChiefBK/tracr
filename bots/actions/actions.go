@@ -4,77 +4,64 @@ import (
 	"tracr-daemon/util"
 )
 
-// ActionIntents
 const (
-	OPEN_SHORT_POSITION = iota
-	OPEN_LONG_POSITION  = iota
-	CLOSE_POSITION      = iota
+	OPEN_SHORT_POSITION ActionIntent = "openShortPosition"
+	OPEN_LONG_POSITION  ActionIntent = "openLongPosition"
+	CLOSE_POSITION      ActionIntent = "closePosition"
 )
 
-// OrderTypes
 const (
-	MARKET_ORDER = iota
-	LIMIT_ORDER  = iota
+	MARKET OrderType = "market"
+	LIMIT  OrderType = "limit"
 )
 
-// ActionConsumers
 const (
-	BOT      = iota
-	EXECUTOR = iota
+	INTERNAL ActionConsumer = "internal"
+	EXTERNAL ActionConsumer = "external"
 )
 
-type ActionIntent int   // OPEN_SHORT_POSITION or OPEN_LONG_POSITION or CLOSE_POSITION or ...
-type OrderType int      // MARKET_ORDER or LIMIT_ORDER or ...
-type ActionConsumer int // BOT or EXECUTOR or ...
+type ActionIntent string   // OPEN_SHORT_POSITION or OPEN_LONG_POSITION or CLOSE_POSITION or ...
+type OrderType string      // MARKET_ORDER or LIMIT_ORDER or ...
+type ActionConsumer string // BOT or EXECUTOR or ...
 
-type ActionData map[string]interface{}
-
-type Action struct {
-	Intent   ActionIntent
+type OrderData struct {
 	Id       string
-	Data     ActionData
-	Consumer ActionConsumer
+	Price    float64
+	Volume   float64
+	Leverage float64
+	Type     OrderType
 }
 
-var ActionFunctions = make(map[string]func() *Action)
-
-func (self *Action) SetVolume(volume float64) {
-	self.Data["volume"] = volume
+type Action interface {
+	Consumer() ActionConsumer
 }
 
-func (self *Action) SetLeverage(leverage int) {
-	self.Data["leverage"] = leverage
+type ExternalAction struct {
+	Id       string
+	Intent   ActionIntent
+	Order    OrderData
 }
 
-func (self *Action) SetMargin(margin float64) {
-	self.Data["margin"] = margin
+func (self ExternalAction) Consumer() ActionConsumer {
+	return EXTERNAL
 }
 
-func (self *Action) SetOrderType(orderType OrderType) {
-	self.Data["orderType"] = orderType
+type InternalAction struct {
+	Id         string
+	PropChange map[string]interface{}
 }
 
-func (self *Action) SetPair(pair string) {
-	self.Data["pair"] = pair
+func (self InternalAction) Consumer() ActionConsumer {
+	return INTERNAL
 }
 
-func (self *Action) SetExchange(exchange string) {
-	self.Data["exchange"] = exchange
-}
-
-func (self *Action) SetBotKey(botKey string) {
-	self.Data["botKey"] = botKey
-}
-
-func newAction(intent ActionIntent, data ActionData, consumer ActionConsumer) *Action {
+func newExternalAction(intent ActionIntent, orderData OrderData) *ExternalAction {
 	id := util.RandString(20)
-	return &Action{intent, id, data, consumer}
+	return &ExternalAction{id, intent, orderData}
 }
 
-func ShortPositionAction() *Action {
-	var intent ActionIntent = OPEN_SHORT_POSITION
-	data := make(ActionData)
-	var consumer ActionConsumer = EXECUTOR
+func newInternalAction(change map[string]interface{}) *InternalAction {
+	id := util.RandString(20)
+	return &InternalAction{id, change}
 
-	return newAction(intent, data, consumer)
 }
