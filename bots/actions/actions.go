@@ -2,6 +2,7 @@ package actions
 
 import (
 	"tracr-daemon/util"
+	"github.com/inconshreveable/log15"
 )
 
 const (
@@ -34,12 +35,17 @@ type OrderData struct {
 
 type Action interface {
 	Consumer() ActionConsumer
+	SetOrderData(data OrderData)
 }
 
 type ExternalAction struct {
 	Id       string
 	Intent   ActionIntent
 	Order    OrderData
+}
+
+func (self *ExternalAction) SetOrderData(data OrderData) {
+	self.Order = data
 }
 
 func (self ExternalAction) Consumer() ActionConsumer {
@@ -51,16 +57,21 @@ type InternalAction struct {
 	PropChange map[string]interface{}
 }
 
+func (self *InternalAction) SetOrderData(data OrderData) {
+	log15.Error("can not set order data for internal action")
+	return
+}
+
 func (self InternalAction) Consumer() ActionConsumer {
 	return INTERNAL
 }
 
-func newExternalAction(intent ActionIntent, orderData OrderData) *ExternalAction {
+func NewExternalAction(intent ActionIntent) *ExternalAction {
 	id := util.RandString(20)
-	return &ExternalAction{id, intent, orderData}
+	return &ExternalAction{Id: id, Intent: intent}
 }
 
-func newInternalAction(change map[string]interface{}) *InternalAction {
+func NewInternalAction(change map[string]interface{}) *InternalAction {
 	id := util.RandString(20)
 	return &InternalAction{id, change}
 

@@ -1,19 +1,19 @@
 package actions
 
 type ActionQueue struct {
-	Queue []*ExternalAction
+	Queue []Action
 }
 
 func NewActionQueue() *ActionQueue {
-	var queue []*ExternalAction
+	var queue []Action
 	return &ActionQueue{queue}
 }
 
-func (aq *ActionQueue) Push(action *ExternalAction) {
+func (aq *ActionQueue) Push(action Action) {
 	aq.Queue = append(aq.Queue, action)
 }
 
-func (aq *ActionQueue) Dequeue() *ExternalAction {
+func (aq *ActionQueue) Dequeue() Action {
 	if len(aq.Queue) < 1 {
 		return nil
 	}

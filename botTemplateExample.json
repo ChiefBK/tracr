@@ -13,11 +13,13 @@
             "isRoot": true,
             "condition": "TrueFunction",
             "actionIntent": null,
+            "actionConsumer": null,
             "children": [
               {
                 "isRoot": false,
                 "condition": "TrueFunction",
                 "actionIntent": "ShortPositionAction",
+                "actionConsumer": "external",
                 "children": []
               }
             ]

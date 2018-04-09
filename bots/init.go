@@ -13,8 +13,6 @@ import (
 func Init() error {
 	log.Info("Initializing bots module", "module", "command")
 
-	runningBots = make(map[string]*Bot)
-
 	conditions.Init()
 
 	//actions.Init()
@@ -25,8 +23,6 @@ func Init() error {
 	//gob.Register(DecisionTree{})
 	//gob.Register(actions.Action{})
 	gob.Register(actions.OrderType(0))
-
-
 
 	return nil
 
@@ -63,19 +59,12 @@ func Start(botName string, interval time.Duration, startImmediately bool, cacheC
 		return
 	}
 
-	runningBots[botName] = bot
-	bot.start(interval, startImmediately)
-	log.Info("bot has started", "module", "command", "botKey", botName)
-
-	log.Info("waiting a few minutes...")
-	<-time.After(10 * time.Minute)
+	bot.start(interval, startImmediately, cacheClient, storeClient)
 }
 
 func Stop(botName string) {
-	bot := runningBots[botName]
-	bot.stop()
-	delete(runningBots, botName)
-	log.Info("bot has stopped", "module", "command", "botKey", botName)
+	panic("stop not implemented")
+	//log.Info("bot has stopped", "module", "command", "botKey", botName)
 }
 
 func InitializeBot(templatePath string, cacheClient *tracr_cache.CacheClient) {
